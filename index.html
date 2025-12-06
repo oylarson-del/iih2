@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Medical Mastermind V4.4</title>
+    <title>Medical Mastermind V4.5</title>
     <style>
         :root { --bg: #1e1e2e; --surface: #313244; --surface-2: #45475a; --text: #cdd6f4; --primary: #89b4fa; --success: #a6e3a1; --danger: #f38ba8; --accent: #fab387; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
@@ -57,6 +57,7 @@
     <div class="stats-bar">
         <span id="deck-indicator">Deck: Loading...</span>
         <span id="streak-indicator">Streak: 0</span>
+        <span id="remaining-indicator">Cards Left: 0</span>
     </div>
 
     <div class="nav-scroll-wrapper">
@@ -91,8 +92,7 @@
 </div>
 
 <script>
-// --- FULL DATABASE START ---
-// Generated from all CSVs with global ffill() to handle merged cells
+// --- FULL DATABASE ---
 const db = {
   "Microbes": [
     {"name": "Staphylococcus aureus", "attributes": {"Characteristics": "Gram positive cocci", "Transmission": "direct contact or respiratory droplets", "Diseases": "Skin infections: cellulitis, impetigo, folliculitis, carbuncles, scaled skin syndrome\n\nosteomyelitis, septic arthritis, endocarditis, pnemonia, gatroenteritis\n\ntoxic shock, bactermeia", "Treatment": "I&D absesses\n\nMRSA: Vancomycin\n\nMSSA: nafcillin"}},
@@ -140,21 +140,48 @@ const db = {
     {"name": "ALL", "attributes": {"Typical Population": "Children", "Immunophenotype & Translocation": "TdT positive, CD10 positive (CALLA)"}}
   ]
 };
-// --- FULL DATABASE END ---
 
     // --- LOGIC ---
     let activeDeck = Object.keys(db)[0];
-    let activeItems = db[activeDeck];
+    let cardQueue = []; // Replaces activeItems for the shuffle logic
     let currentItem = null;
     let streak = 0;
     let isFlashcard = false;
     let flaggedItems = new Set();
 
     function init() {
-        const saved = localStorage.getItem('med_mastermind_flags_v4_4');
+        const saved = localStorage.getItem('med_mastermind_flags_v4_5');
         if (saved) flaggedItems = new Set(JSON.parse(saved));
         renderNav();
+        reshuffleDeck(activeDeck);
         nextQuestion();
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function reshuffleDeck(deckName) {
+        let items = [];
+        if (deckName === 'Flagged') {
+            flaggedItems.forEach(id => {
+                const [d, n] = id.split(':');
+                if (db[d]) {
+                    const found = db[d].find(i => i.name === n);
+                    if (found) items.push(found);
+                }
+            });
+        } else {
+            items = [...db[deckName]]; // Copy original items
+        }
+        
+        // Fisher-Yates Shuffle
+        cardQueue = shuffleArray(items);
+        updateCountDisplay();
     }
 
     function renderNav() {
@@ -175,25 +202,14 @@ const db = {
     }
 
     function switchDeck(name) {
-        if (name === 'Flagged') {
-            if (flaggedItems.size === 0) return alert("Flag some items first!");
-            const flaggedList = [];
-            flaggedItems.forEach(id => {
-                const [d, n] = id.split(':');
-                if (db[d]) {
-                    const found = db[d].find(i => i.name === n);
-                    if (found) flaggedList.push(found);
-                }
-            });
-            activeItems = flaggedList;
-        } else {
-            activeItems = db[name];
-        }
+        if (name === 'Flagged' && flaggedItems.size === 0) return alert("Flag some items first!");
+        
         activeDeck = name;
         streak = 0;
         document.getElementById('deck-indicator').textContent = `Deck: ${name}`;
         document.getElementById('streak-indicator').textContent = `Streak: 0`;
         renderNav();
+        reshuffleDeck(name);
         nextQuestion();
     }
 
@@ -202,11 +218,13 @@ const db = {
         document.getElementById('mode-label').textContent = isFlashcard ? "Mode: Flashcard" : "Mode: Quiz";
         document.getElementById('quiz-area').classList.toggle('hidden', isFlashcard);
         document.getElementById('flashcard-area').classList.toggle('hidden', !isFlashcard);
-        nextQuestion();
+        // Don't skip current question on toggle
     }
 
     function toggleFlag() {
         if (!currentItem) return;
+        
+        // Find source deck
         let sourceDeck = activeDeck;
         if (activeDeck === 'Flagged') {
             for (const [key, val] of Object.entries(db)) {
@@ -218,7 +236,7 @@ const db = {
         if (flaggedItems.has(id)) flaggedItems.delete(id);
         else flaggedItems.add(id);
         
-        localStorage.setItem('med_mastermind_flags_v4_4', JSON.stringify([...flaggedItems]));
+        localStorage.setItem('med_mastermind_flags_v4_5', JSON.stringify([...flaggedItems]));
         updateFlagIcon();
         renderNav();
     }
@@ -227,11 +245,19 @@ const db = {
         const btn = document.getElementById('flag-btn');
         let sourceDeck = activeDeck;
         if (activeDeck === 'Flagged') {
-            for (const [key, val] of Object.entries(db)) {
+             for (const [key, val] of Object.entries(db)) {
                 if (val.find(i => i.name === currentItem.name)) sourceDeck = key;
             }
+        } else {
+             // Optimization: if simple deck, we just use activeDeck
         }
-        const id = `${sourceDeck}:${currentItem.name}`;
+        // Actually, just searching properly is safer
+        let foundSource = null;
+        for (const [key, val] of Object.entries(db)) {
+             if (val.find(i => i.name === currentItem.name)) { foundSource = key; break; }
+        }
+        
+        const id = `${foundSource}:${currentItem.name}`;
         
         if (flaggedItems.has(id)) {
             btn.classList.add('active');
@@ -242,16 +268,29 @@ const db = {
         }
     }
 
+    function updateCountDisplay() {
+        document.getElementById('remaining-indicator').textContent = `Cards Left: ${cardQueue.length}`;
+    }
+
     function nextQuestion() {
         document.getElementById('next-btn').classList.add('hidden');
         document.getElementById('flashcard-answer').classList.add('hidden');
         document.getElementById('flashcard-judgement').classList.add('hidden');
         document.getElementById('reveal-btn').classList.remove('hidden');
         document.getElementById('quiz-area').innerHTML = '';
+
+        // --- SMART SHUFFLE LOGIC ---
+        if (cardQueue.length === 0) {
+            // Deck empty, reshuffle!
+            reshuffleDeck(activeDeck);
+            // Optional: alert("Deck completed! Reshuffling.");
+        }
         
-        currentItem = activeItems[Math.floor(Math.random() * activeItems.length)];
+        currentItem = cardQueue.pop();
+        updateCountDisplay();
         updateFlagIcon();
 
+        // Vignette
         const attrs = currentItem.attributes;
         const keys = Object.keys(attrs);
         for (let i = keys.length - 1; i > 0; i--) {
@@ -270,13 +309,23 @@ const db = {
             vignetteContainer.appendChild(div);
         });
 
+        // Quiz Mode
         if (!isFlashcard) {
             const correct = currentItem.name;
-            const pool = activeItems.length < 5 ? Object.values(db).flat() : activeItems;
+            // Distractors: Get all items from DB for this category
+            let pool = [];
+            if(activeDeck === 'Flagged') {
+                 // Pool is ALL items in DB to ensure difficulty
+                 pool = Object.values(db).flat();
+            } else {
+                 pool = db[activeDeck];
+            }
+            
             let options = new Set([correct]);
             let attempts = 0;
-            while (options.size < 4 && attempts < 50) {
-                options.add(pool[Math.floor(Math.random() * pool.length)].name);
+            while (options.size < 4 && attempts < 100) {
+                const r = pool[Math.floor(Math.random() * pool.length)].name;
+                options.add(r);
                 attempts++;
             }
             
@@ -301,6 +350,16 @@ const db = {
             btn.classList.add('wrong');
             streak = 0;
             btns.forEach(b => { if(b.textContent === correct) b.classList.add('correct'); });
+            
+            // Re-inject wrong card into queue? (Spaced Repetition Light)
+            // Let's insert it back into the queue at a random spot so they see it again soon
+            if (cardQueue.length > 0) {
+                 const insertPos = Math.floor(Math.random() * cardQueue.length);
+                 cardQueue.splice(insertPos, 0, currentItem);
+                 updateCountDisplay();
+            } else {
+                 cardQueue.push(currentItem); // It was the last card, put it back
+            }
         }
         document.getElementById('streak-indicator').textContent = `Streak: ${streak}`;
         document.getElementById('next-btn').classList.remove('hidden');
@@ -320,6 +379,15 @@ const db = {
             streak = 0;
             const btn = document.getElementById('flag-btn');
             if (!btn.classList.contains('active')) toggleFlag();
+            
+            // Re-inject wrong card
+            if (cardQueue.length > 0) {
+                 const insertPos = Math.floor(Math.random() * cardQueue.length);
+                 cardQueue.splice(insertPos, 0, currentItem);
+                 updateCountDisplay();
+            } else {
+                 cardQueue.push(currentItem);
+            }
         }
         document.getElementById('streak-indicator').textContent = `Streak: ${streak}`;
         nextQuestion();
