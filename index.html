@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Medical Mastermind V4.4</title>
+    <style>
+        :root { --bg: #1e1e2e; --surface: #313244; --surface-2: #45475a; --text: #cdd6f4; --primary: #89b4fa; --success: #a6e3a1; --danger: #f38ba8; --accent: #fab387; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
+        .container { background: var(--surface); padding: 1.5rem; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-width: 800px; width: 100%; text-align: center; position: relative; display: flex; flex-direction: column; gap: 15px; }
+        
+        h1 { margin: 0; color: var(--primary); font-size: 1.8rem; letter-spacing: -0.5px; }
+        .stats-bar { display: flex; justify-content: space-between; font-size: 0.85rem; color: #a6adc8; font-weight: 500; padding: 0 5px; }
+        
+        .nav-scroll-wrapper { overflow-x: auto; padding-bottom: 5px; margin: 0 -10px; -webkit-overflow-scrolling: touch; }
+        .nav-bar { display: flex; gap: 8px; padding: 0 10px; min-width: min-content; }
+        .nav-btn { white-space: nowrap; padding: 8px 16px; border: none; background: var(--surface-2); color: #bac2de; border-radius: 20px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease; }
+        .nav-btn.active { background: var(--primary); color: var(--bg); box-shadow: 0 4px 12px rgba(137, 180, 250, 0.3); }
+        .nav-btn.flagged-deck.active { background: var(--danger); color: var(--bg); box-shadow: 0 4px 12px rgba(243, 139, 168, 0.3); }
+        
+        .question-card { background: #181825; padding: 25px; border-radius: 12px; border: 1px solid var(--surface-2); position: relative; min-height: 180px; display: flex; flex-direction: column; justify-content: center; }
+        .flag-toggle { position: absolute; top: 12px; right: 12px; background: transparent; border: none; color: var(--surface-2); font-size: 1.5rem; cursor: pointer; transition: transform 0.2s; }
+        .flag-toggle.active { color: var(--danger); }
+        
+        .vignette-container { text-align: left; display: flex; flex-direction: column; gap: 12px; }
+        .vignette-item { border-left: 3px solid var(--accent); padding-left: 12px; }
+        .vignette-label { display: block; color: var(--accent); font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .vignette-text { font-size: 1.05rem; line-height: 1.5; color: #e6e9ef; }
+
+        .controls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 5px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 12px; }
+        .switch-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+        .toggle-switch { position: relative; width: 44px; height: 24px; background: var(--surface-2); border-radius: 12px; transition: 0.3s; }
+        .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        input:checked + .toggle-switch { background: var(--primary); }
+        input:checked + .toggle-switch::after { transform: translateX(20px); }
+        
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 600px) { .options-grid { grid-template-columns: 1fr; } }
+        
+        .opt-btn { background: var(--surface-2); border: none; padding: 16px; border-radius: 10px; color: white; font-size: 1rem; font-weight: 500; cursor: pointer; transition: transform 0.1s, background 0.2s; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.3; }
+        .opt-btn.correct { background: var(--success); color: var(--bg); box-shadow: 0 0 15px rgba(166, 227, 161, 0.4); border: 1px solid var(--success); }
+        .opt-btn.wrong { background: var(--danger); color: var(--bg); opacity: 0.6; }
+
+        .flashcard-area { display: flex; flex-direction: column; gap: 15px; }
+        .reveal-btn { width: 100%; background: var(--accent); color: var(--bg); font-weight: 800; padding: 20px; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer; letter-spacing: 0.5px; }
+        .answer-reveal { background: var(--surface-2); padding: 20px; border-radius: 12px; border: 2px solid var(--success); color: var(--success); font-weight: bold; font-size: 1.3rem; text-align: center; }
+        
+        .next-btn { background: var(--primary); color: var(--bg); width: 100%; padding: 18px; border: none; border-radius: 12px; font-weight: 800; font-size: 1.1rem; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 15px rgba(137, 180, 250, 0.4); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Medical Mastermind</h1>
+    
+    <div class="stats-bar">
+        <span id="deck-indicator">Deck: Loading...</span>
+        <span id="streak-indicator">Streak: 0</span>
+    </div>
+
+    <div class="nav-scroll-wrapper">
+        <div id="nav-container" class="nav-bar"></div>
+    </div>
+
+    <div class="controls">
+        <label class="switch-label">
+            <input type="checkbox" id="mode-switch" onchange="toggleMode()" style="display:none">
+            <div class="toggle-switch"></div>
+            <span id="mode-label">Mode: Quiz</span>
+        </label>
+    </div>
+
+    <div class="question-card">
+        <button id="flag-btn" class="flag-toggle" onclick="toggleFlag()" title="Flag for Review">★</button>
+        <div id="vignette-box" class="vignette-container"></div>
+    </div>
+
+    <div id="quiz-area" class="options-grid"></div>
+    
+    <div id="flashcard-area" class="flashcard-area hidden">
+        <button id="reveal-btn" class="reveal-btn" onclick="revealFlashcard()">REVEAL DIAGNOSIS</button>
+        <div id="flashcard-answer" class="answer-reveal hidden"></div>
+        <div id="flashcard-judgement" class="options-grid hidden">
+            <button class="opt-btn wrong" onclick="rateFlashcard(false)">Forgot</button>
+            <button class="opt-btn correct" onclick="rateFlashcard(true)">Remembered</button>
+        </div>
+    </div>
+
+    <button id="next-btn" class="next-btn hidden" onclick="nextQuestion()">Next Case ➔</button>
+</div>
+
+<script>
+// --- FULL DATABASE START ---
+// Generated from all CSVs with global ffill() to handle merged cells
+const db = {
+  "Microbes": [
+    {"name": "Staphylococcus aureus", "attributes": {"Characteristics": "Gram positive cocci", "Transmission": "direct contact or respiratory droplets", "Diseases": "Skin infections: cellulitis, impetigo, folliculitis, carbuncles, scaled skin syndrome\n\nosteomyelitis, septic arthritis, endocarditis, pnemonia, gatroenteritis\n\ntoxic shock, bactermeia", "Treatment": "I&D absesses\n\nMRSA: Vancomycin\n\nMSSA: nafcillin"}},
+    {"name": "Staphylococcus epidermidis", "attributes": {"Characteristics": "Gram positive cocci", "Natural reservoir": "Normal skin flora, mucosal surfaces, conjuctiva, ears, vagina", "Diseases": "infections due to implanted devices", "Treatment": "Vancomycin with rifampin or gentamicin"}},
+    {"name": "Strepococcus pyogenes (GAS)", "attributes": {"Characteristics": "Gram positive cocci", "Transmission": "respiratory droplets or direct contact", "Diseases": "cellulitis, impetigo, erysipelas\n\nscarlet fever, pueperal sepsis, bacteremia, pneumonia, necrotizing fasciitis, TSS, pharyngitis\n\nPost-infection: Rheumatic fever, glomerulonephritis", "Treatment": "Penicillin"}},
+    {"name": "Streptococcus Agalactiae (GBS)", "attributes": {"Characteristics": "Gram positive cocci", "Transmission": "mother to newborn during pregnancy, delivery, or later", "Diseases": "meningitis, sepsis in neonates, skin infections esp. in diabetic foot ulcers", "Treatment": "penicillin, ampicillin with gentamycin for severe cases"}},
+    {"name": "Clostridium tetani", "attributes": {"Characteristics": "Gram negative coccobacillus", "Diseases": "rigid paralysis, often with lockjaw\nstarts with cramping and twitching around wound site then spreads", "Pathogenesis factors": "toxin called tetanospasmin which blocks the release of inhibitory neurotransmitters such as GABA and glycine", "Treatment": "antitoxin sera with penicillin or metronidazole"}},
+    {"name": "Influenza", "attributes": {"Characteristics": "Types A, B, C\nSegmented, ssRNA, negative sense, enveloped", "Treatment": "Neuraminidase inhibitors: zanamivir, oseltamivir\n\nM2 inhibitors: amantadine, rimantadine"}},
+    {"name": "HIV I & II", "attributes": {"Characteristics": "single stranded RNA, diploid, has reverse transcriptase, enveloped", "Pathogenesis factors": "virus infects CD4 T cells and macrophages and dendritic cells. Pt is infected for life, CD4 cells slowly decline", "Identification": "4th gen test for p24 antigen and HIV antibodies. Confirm with PCR", "Treatment": "HAART beginning upon confirmation of infection"}}
+  ],
+  "Anti-Infectives": [
+    {"name": "Penicillin", "attributes": {"Mechanism": "binds transpeptides, prevent crosslinking and weaken cell wall", "Use": "narrow spectrum, gram positive (strep)", "Toxicity": "allergies"}},
+    {"name": "Amoxicillin", "attributes": {"Mechanism": "binds transpeptides, prevent crosslinking and weaken cell wall", "Use": "broad spectrum, gram positive (strep), some gram negatives (E. coli, H. influenzae)", "Toxicity": "allergies"}},
+    {"name": "Vancomycin", "attributes": {"Mechanism": "Inhibits cell wall synthesis by binding D-ala D-ala portion of cell wall precursors", "Use": "gram positive only, reserved for resistant infections (MRSA), C. diff (oral)", "Toxicity": "Red man syndrome (flushing due to histamine release), Ototoxicity, Nephrotoxicity"}},
+    {"name": "Gentamicin", "attributes": {"Mechanism": "block protein synthesis by binding to 30S subunit", "Use": "severe gram negative rod infections", "Toxicity": "neuromuscular blockade, nephrotoxicity, ototoxicity"}},
+    {"name": "Tobramycin", "attributes": {"Mechanism": "block protein synthesis by binding to 30S subunit", "Use": "broad spectrum, mostly gram negatives", "Toxicity": "neuromuscular blockade, nephrotoxicity, ototoxicity"}},
+    {"name": "Azithromycin", "attributes": {"Mechanism": "binds 23S rRNA of 50S subunit", "Use": "atypical pneumonias (Mycoplasma, Chlamydia, Legionella), STDs (Chlamydia)", "Toxicity": "GI motility issues, arrhythmia (long QT), cholestatic hepatitis"}},
+    {"name": "Ciprofloxacin", "attributes": {"Mechanism": "inhibits DNA gyrase (topoisomerase II) and topoisomerase IV", "Toxicity": "GI symptoms, tendon rupture"}}
+  ],
+  "Anti-Neoplastics": [
+    {"name": "Methotrexate", "attributes": {"Mechanism": "Folic acid analog, inhibits dihydrofolate reductase", "Toxicity": "myelosuppression, GI toxicity (reversed with leucovorin)\n\nHepatotoxicity at high doses"}},
+    {"name": "Leucovorin", "attributes": {"Use": "Inihibiting methotrexate toxicity", "Mechanism": "Bypasses blocked DHFR"}},
+    {"name": "5-Fluorouracil", "attributes": {"Mechanism": "Competitively inhibits thymidylate synthase leading to a decrease in DNA synthesis and cell death", "Use": "Slow growing solid tumors, breast cancer, colon & rectum cancers", "Toxicity": "myelosuppression, GI toxicity"}},
+    {"name": "Capecitabine", "attributes": {"Mechanism": "Competitively inhibits thymidylate synthase leading to a decrease in DNA synthesis and cell death", "Use": "Slow growing solid tumors, breast cancer, colon & rectum cancers"}},
+    {"name": "Cytarabine (AraC)", "attributes": {"Mechanism": "incorporates into DNA and terminates chain elongation", "Toxicity": "severe myelosuppression, high doses can cause acute cerebellar syndrome"}},
+    {"name": "Vinblastine", "attributes": {"Mechanism": "reversibly bind tubulin and block polymerization into microtubules", "Toxicity": "bone marrow suppression"}},
+    {"name": "Vincristine", "attributes": {"Mechanism": "reversibly bind tubulin and block polymerization into microtubules", "Toxicity": "peripheral neuropathy"}},
+    {"name": "Paclitaxel", "attributes": {"Mechanism": "Promotes microtubule formation and stabilization", "Toxicity": "hypersensitivity, myelosuppression, neuropathy"}},
+    {"name": "Etoposide", "attributes": {"Mechanism": "inhibits topoisomerase II, thus blocking DNA replication", "Use": "Testicular tumors, small cell carcinoma of the lung", "Toxicity": "myelosuppression, alopecia"}},
+    {"name": "Doxorubicin (Adriamycin)", "attributes": {"Mechanism": "Intercalates in DNA --> inhibits DNA/RNA synthesis", "Toxicity": "Cardiomyopathy (epirubicin less so)\n\nmyelosuppression, severe alopecia"}},
+    {"name": "Imatinib mesylate (GLEEVEC)", "attributes": {"Mechanism": "binds to Bcr-Abl kinase and blocks activity", "Use": "CML", "Toxicity": "nausea, edema, muscle cramps, rash, diarrhea, bone marrow suppression"}}
+  ],
+  "Anemias": [
+    {"name": "Iron Deficiency Anemia", "attributes": {"Labs": "Low Ferritin, High TIBC, Low Serum Iron, Microcytic Hypochromic RBCs"}},
+    {"name": "B12 Deficiency (Pernicious Anemia)", "attributes": {"Mechanism": "Autoantibodies to intrinsic factor or parietal cells", "Symptoms": "Fatigue, glossitis, Neurologic symptoms (paresthesias, subacute combined degeneration)", "Labs": "High MCV, Hypersegmented neutrophils, Low B12, High Homocysteine, High Methylmalonic acid"}},
+    {"name": "Sickle Cell Anemia", "attributes": {"Mechanism": "Point mutation in beta-globin chain (Glu -> Val)", "Symptoms": "Vaso-occlusive crises (pain), aplastic crisis (parvovirus B19), autosplenectomy"}}
+  ],
+  "Clotting Disorders": [
+    {"name": "Hemophilia A", "attributes": {"Mechanism": "Factor VIII deficiency (X-linked)", "Labs": "Prolonged PTT, Normal PT, Normal platelet count"}},
+    {"name": "Von Willebrand Disease", "attributes": {"Mechanism": "Deficiency or defect in vWF (AD)", "Labs": "Prolonged bleeding time, Normal/Prolonged PTT"}}
+  ],
+  "WBC Disorders": [
+    {"name": "CML", "attributes": {"Cause(s)/pathophysiology": "t(9;22) Philadelphia chromosome (BCR-ABL)", "Treatment": "Imatinib (Tyrosine kinase inhibitor)"}},
+    {"name": "AML", "attributes": {"Morphological changes": "Auer rods (crystal aggregates of MPO)", "Typical Population": "Adults (median age 65)"}},
+    {"name": "ALL", "attributes": {"Typical Population": "Children", "Immunophenotype & Translocation": "TdT positive, CD10 positive (CALLA)"}}
+  ]
+};
+// --- FULL DATABASE END ---
+
+    // --- LOGIC ---
+    let activeDeck = Object.keys(db)[0];
+    let activeItems = db[activeDeck];
+    let currentItem = null;
+    let streak = 0;
+    let isFlashcard = false;
+    let flaggedItems = new Set();
+
+    function init() {
+        const saved = localStorage.getItem('med_mastermind_flags_v4_4');
+        if (saved) flaggedItems = new Set(JSON.parse(saved));
+        renderNav();
+        nextQuestion();
+    }
+
+    function renderNav() {
+        const nav = document.getElementById('nav-container');
+        nav.innerHTML = '';
+        Object.keys(db).forEach(key => {
+            const btn = document.createElement('button');
+            btn.className = `nav-btn ${key === activeDeck ? 'active' : ''}`;
+            btn.textContent = key;
+            btn.onclick = () => switchDeck(key);
+            nav.appendChild(btn);
+        });
+        const flagBtn = document.createElement('button');
+        flagBtn.className = `nav-btn flagged-deck ${activeDeck === 'Flagged' ? 'active' : ''}`;
+        flagBtn.textContent = `★ Flagged (${flaggedItems.size})`;
+        flagBtn.onclick = () => switchDeck('Flagged');
+        nav.appendChild(flagBtn);
+    }
+
+    function switchDeck(name) {
+        if (name === 'Flagged') {
+            if (flaggedItems.size === 0) return alert("Flag some items first!");
+            const flaggedList = [];
+            flaggedItems.forEach(id => {
+                const [d, n] = id.split(':');
+                if (db[d]) {
+                    const found = db[d].find(i => i.name === n);
+                    if (found) flaggedList.push(found);
+                }
+            });
+            activeItems = flaggedList;
+        } else {
+            activeItems = db[name];
+        }
+        activeDeck = name;
+        streak = 0;
+        document.getElementById('deck-indicator').textContent = `Deck: ${name}`;
+        document.getElementById('streak-indicator').textContent = `Streak: 0`;
+        renderNav();
+        nextQuestion();
+    }
+
+    function toggleMode() {
+        isFlashcard = document.getElementById('mode-switch').checked;
+        document.getElementById('mode-label').textContent = isFlashcard ? "Mode: Flashcard" : "Mode: Quiz";
+        document.getElementById('quiz-area').classList.toggle('hidden', isFlashcard);
+        document.getElementById('flashcard-area').classList.toggle('hidden', !isFlashcard);
+        nextQuestion();
+    }
+
+    function toggleFlag() {
+        if (!currentItem) return;
+        let sourceDeck = activeDeck;
+        if (activeDeck === 'Flagged') {
+            for (const [key, val] of Object.entries(db)) {
+                if (val.find(i => i.name === currentItem.name)) sourceDeck = key;
+            }
+        }
+        const id = `${sourceDeck}:${currentItem.name}`;
+        
+        if (flaggedItems.has(id)) flaggedItems.delete(id);
+        else flaggedItems.add(id);
+        
+        localStorage.setItem('med_mastermind_flags_v4_4', JSON.stringify([...flaggedItems]));
+        updateFlagIcon();
+        renderNav();
+    }
+
+    function updateFlagIcon() {
+        const btn = document.getElementById('flag-btn');
+        let sourceDeck = activeDeck;
+        if (activeDeck === 'Flagged') {
+            for (const [key, val] of Object.entries(db)) {
+                if (val.find(i => i.name === currentItem.name)) sourceDeck = key;
+            }
+        }
+        const id = `${sourceDeck}:${currentItem.name}`;
+        
+        if (flaggedItems.has(id)) {
+            btn.classList.add('active');
+            btn.style.color = '#f38ba8';
+        } else {
+            btn.classList.remove('active');
+            btn.style.color = '#45475a';
+        }
+    }
+
+    function nextQuestion() {
+        document.getElementById('next-btn').classList.add('hidden');
+        document.getElementById('flashcard-answer').classList.add('hidden');
+        document.getElementById('flashcard-judgement').classList.add('hidden');
+        document.getElementById('reveal-btn').classList.remove('hidden');
+        document.getElementById('quiz-area').innerHTML = '';
+        
+        currentItem = activeItems[Math.floor(Math.random() * activeItems.length)];
+        updateFlagIcon();
+
+        const attrs = currentItem.attributes;
+        const keys = Object.keys(attrs);
+        for (let i = keys.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [keys[i], keys[j]] = [keys[j], keys[i]];
+        }
+        const selectedKeys = keys.slice(0, Math.min(3, keys.length));
+        
+        const vignetteContainer = document.getElementById('vignette-box');
+        vignetteContainer.innerHTML = '';
+        
+        selectedKeys.forEach(key => {
+            const div = document.createElement('div');
+            div.className = 'vignette-item';
+            div.innerHTML = `<span class="vignette-label">${key}</span><span class="vignette-text">${attrs[key]}</span>`;
+            vignetteContainer.appendChild(div);
+        });
+
+        if (!isFlashcard) {
+            const correct = currentItem.name;
+            const pool = activeItems.length < 5 ? Object.values(db).flat() : activeItems;
+            let options = new Set([correct]);
+            let attempts = 0;
+            while (options.size < 4 && attempts < 50) {
+                options.add(pool[Math.floor(Math.random() * pool.length)].name);
+                attempts++;
+            }
+            
+            Array.from(options).sort(() => Math.random() - 0.5).forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'opt-btn';
+                btn.textContent = opt;
+                btn.onclick = () => checkQuiz(btn, opt, correct);
+                document.getElementById('quiz-area').appendChild(btn);
+            });
+        }
+    }
+
+    function checkQuiz(btn, selected, correct) {
+        const btns = document.querySelectorAll('.opt-btn');
+        btns.forEach(b => b.disabled = true);
+        
+        if (selected === correct) {
+            btn.classList.add('correct');
+            streak++;
+        } else {
+            btn.classList.add('wrong');
+            streak = 0;
+            btns.forEach(b => { if(b.textContent === correct) b.classList.add('correct'); });
+        }
+        document.getElementById('streak-indicator').textContent = `Streak: ${streak}`;
+        document.getElementById('next-btn').classList.remove('hidden');
+    }
+
+    function revealFlashcard() {
+        document.getElementById('reveal-btn').classList.add('hidden');
+        const ans = document.getElementById('flashcard-answer');
+        ans.textContent = currentItem.name;
+        ans.classList.remove('hidden');
+        document.getElementById('flashcard-judgement').classList.remove('hidden');
+    }
+
+    function rateFlashcard(success) {
+        if (success) streak++;
+        else {
+            streak = 0;
+            const btn = document.getElementById('flag-btn');
+            if (!btn.classList.contains('active')) toggleFlag();
+        }
+        document.getElementById('streak-indicator').textContent = `Streak: ${streak}`;
+        nextQuestion();
+    }
+
+    init();
+</script>
+</body>
+</html>
